@@ -1373,7 +1373,9 @@ void main() {
         target.clear_color(0.5, 0.5, 0.5, 1.0);
 
         let uniforms = uniform!(
-            tex: &render_data.dist_tex,
+            tex: render_data
+                .dist_tex.sampled()
+                .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
         );
 
         target
