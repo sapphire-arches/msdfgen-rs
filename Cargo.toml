@@ -1,0 +1,13 @@
+[package]
+name = "fontexp"
+version = "0.1.0"
+authors = ["bobtwinkles <srkoser+GitHub@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+glium = "0.22"
+font-kit = "0.1"
+lyon_path = "0.12"
+euclid = "0.19"
+bitflags = "1.0"
+rand = "0.5"
