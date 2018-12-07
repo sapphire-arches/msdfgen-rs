@@ -1370,6 +1370,9 @@ void main() {
     const default_char: char = '2';
     let mut render_data = contour_vbos_for_chr(&font, default_char, &display);
 
+    let mut o_down = false;
+    let mut draw_outlines = false;
+
     let mut closed = false;
     while !closed {
         let params = glium::DrawParameters {
@@ -1395,26 +1398,28 @@ void main() {
             )
             .unwrap();
 
-        let uniforms = uniform!();
-        target
-            .draw(
-                &render_data.raw_contours_vbo,
-                glium::index::NoIndices(glium::index::PrimitiveType::LineStrip),
-                &line_shader,
-                &uniforms,
-                &params,
-            )
-            .unwrap();
+        // let uniforms = uniform!();
+        // target
+        //     .draw(
+        //         &render_data.raw_contours_vbo,
+        //         glium::index::NoIndices(glium::index::PrimitiveType::LineStrip),
+        //         &line_shader,
+        //         &uniforms,
+        //         &params,
+        //     )
+        //     .unwrap();
 
-        target
-            .draw(
-                &render_data.contours_vbo,
-                glium::index::NoIndices(glium::index::PrimitiveType::LineStrip),
-                &line_shader,
-                &uniforms,
-                &params,
-            )
-            .unwrap();
+        if draw_outlines {
+            target
+                .draw(
+                    &render_data.contours_vbo,
+                    glium::index::NoIndices(glium::index::PrimitiveType::LineStrip),
+                    &line_shader,
+                    &uniforms,
+                    &params,
+                )
+                .unwrap();
+        }
 
         target.finish().unwrap();
 
@@ -1441,6 +1446,13 @@ void main() {
                         Some(glutin::VirtualKeyCode::X) => 'x',
                         Some(glutin::VirtualKeyCode::Y) => 'y',
                         Some(glutin::VirtualKeyCode::Z) => 'z',
+                        Some(glutin::VirtualKeyCode::O) => {
+                            if !o_down {
+                                draw_outlines = !draw_outlines;
+                            }
+                            o_down = !o_down;
+                            default_char
+                        }
                         _ => default_char,
                     };
                     render_data = contour_vbos_for_chr(&font, key, &display);
