@@ -5,6 +5,8 @@ use font_kit::font::Font;
 use glium::{glutin, Surface};
 use lyon_path::math::{Angle, Point, Vector};
 
+const SDF_DIMENSION: usize = 24;
+
 fn get_font() -> Font {
     use font_kit::family_name::FamilyName;
     use font_kit::properties::{Properties, Style};
@@ -942,7 +944,7 @@ impl<'a> EdgePoint<'a> {
     }
 }
 
-fn compute_msdf(contours: &[Contour], range: f32) -> Vec<Vec<(f32, f32, f32)>> {
+fn compute_msdf(contours: &[Contour], dim: usize) -> Vec<Vec<(f32, f32, f32)>> {
     #[derive(Copy, Clone, PartialEq)]
     struct MultiDistance {
         r: f32,
@@ -960,15 +962,14 @@ fn compute_msdf(contours: &[Contour], range: f32) -> Vec<Vec<(f32, f32, f32)>> {
             }
         }
     }
-    const DIM: usize = 64;
-    let scale: f32 = 1.0 / (DIM as f32);
+    let scale: f32 = 1.0 / (dim as f32);
     let windings: Vec<i32> = contours.iter().map(|c| c.winding() as i32).collect();
     println!("Windings: {:?}", windings);
 
-    (0..DIM)
+    (0..dim)
         .map(|y| {
             let py = (y as f32 + 0.5) * scale;
-            (0..DIM)
+            (0..dim)
                 .map(|x| {
                     // We assume there is at least 1 contour
                     // If there isn't make everything magenta
@@ -1109,15 +1110,14 @@ fn compute_msdf(contours: &[Contour], range: f32) -> Vec<Vec<(f32, f32, f32)>> {
         .collect()
 }
 
-fn compute_sdf(contours: &[Contour], range: f32) -> Vec<Vec<(f32, f32, f32)>> {
-    const DIM: usize = 16;
-    let scale: f32 = 1.0 / (DIM as f32);
+fn compute_sdf(contours: &[Contour], dim: usize) -> Vec<Vec<(f32, f32, f32)>> {
+    let scale: f32 = 1.0 / (dim as f32);
     let windings: Vec<i32> = contours.iter().map(|c| c.winding() as i32).collect();
 
-    (0..DIM)
+    (0..dim)
         .map(|y| {
             let py = (y as f32 + 0.5) * scale;
-            (0..DIM)
+            (0..dim)
                 .map(|x| {
                     if contours.len() == 0 {
                         return (1.0f32, 0.0, 1.0);
@@ -1218,7 +1218,7 @@ fn contour_vbos_for_chr(
     println!("{:?}", contours);
     let contours = recolor_contours(contours, Angle::degrees(3.0), 1);
     println!("{:?}", font.metrics());
-    let msdf = compute_msdf(&contours, 0.5);
+    let msdf = compute_msdf(&contours, SDF_DIMENSION);
     let msdf_min = msdf
         .iter()
         .flat_map(|x| x)
