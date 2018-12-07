@@ -820,7 +820,23 @@ fn recolor_contours(contours: Vec<Contour>, threshold: Angle, mut seed: u64) -> 
         .collect()
 }
 
+fn bounds_for_contours(contours: &[Contour]) -> euclid::TypedRect<f32> {
+    use euclid::{TypedRect, TypedSize2D};
+    let mut elements = contours.iter().flat_map(|x| x.elements.iter());
+    let initial = {
+        let p = match elements.next() {
+            Some(x) => x.sample(0.0),
+            None => return TypedRect::new(Point::new(0.0, 0.0), TypedSize2D::new(0.0, 0.0)),
+        };
+        TypedRect::new(p, TypedSize2D::new(0.0, 0.0))
+    };
+    elements.fold(initial, |acc, x| {
+        unimplemented!()
+    })
+}
+
 fn rescale_contours(contours: Vec<Contour>, bounds: lyon_path::math::Rect) -> Vec<Contour> {
+    let initial_bounds = bounds_for_contours(&contours);
     let reproject = |p: Point| {
         return Point::new(
             (p.x - bounds.origin.x) / bounds.size.width,
@@ -1206,13 +1222,7 @@ fn contour_vbos_for_chr(
     let contours = get_glyph(&font, chr);
     let contours = rescale_contours(
         contours,
-        euclid::TypedRect::new(
-            Point::new(0.0f32, metrics.descent),
-            euclid::TypedSize2D::new(
-                metrics.units_per_em as f32,
-                metrics.ascent - metrics.descent,
-            ),
-        ),
+        euclid::TypedRect::new(Point::new(0.25, 0.25), euclid::TypedSize2D::new(0.5, 0.5)),
     );
     let raw_contours_vbo = contours_vbo(&contours, display, ContourColorMode::TraceContour);
     println!("{:?}", contours);
@@ -1265,8 +1275,7 @@ fn contour_vbos_for_chr(
 
 fn main() {
     let mut events_loop = glutin::EventsLoop::new();
-    let window = glutin::WindowBuilder::new()
-        .with_dimensions((600, 600).into());
+    let window = glutin::WindowBuilder::new().with_dimensions((600, 600).into());
     let context = glutin::ContextBuilder::new();
     let context = context.with_gl_profile(glutin::GlProfile::Core);
     let context = context.with_gl_debug_flag(true);
