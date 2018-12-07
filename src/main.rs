@@ -59,80 +59,6 @@ fn median(a: f32, b: f32, c: f32) -> f32 {
     max(min(a, b), min(max(a, b), c))
 }
 
-fn solve_quadratic(ts: &mut [f32; 2], a: f32, b: f32, c: f32) -> usize {
-    if a.abs() < 1E-14 {
-        if b.abs() < 1E-14 {
-            0
-        } else {
-            ts[0] = -c / b;
-            1
-        }
-    } else {
-        let dscr = (b * b) - (4.0 * a * c);
-        if dscr >= 0.0 {
-            let dscr = dscr.sqrt();
-            ts[0] = (-b + dscr) / (2.0 * a);
-            ts[1] = (-b - dscr) / (2.0 * a);
-            2
-        } else if dscr < -1E-14 {
-            ts[0] = -b / (2.0 * a);
-            1
-        } else {
-            0
-        }
-    }
-}
-
-fn solve_cubic_normed(ts: &mut [f32; 3], a: f32, b: f32, c: f32) -> usize {
-    let a2 = a * a;
-    let q = (a2 - 3.0 * b) / 9.0;
-    let r = (a * (2.0 * a2 - 9.0 * b) + 27.0 * c) / 54.0;
-    let r2 = r * r;
-    let q3 = q * q * q;
-    if r2 < q3 {
-        let t = r / q3.sqrt();
-        let t = if t < -1.0 {
-            -1.0
-        } else if t > 1.0 {
-            1.0
-        } else {
-            t
-        };
-        let t = t.acos();
-        let a = a / 3.0;
-        let q = -2.0 * q.sqrt();
-        ts[0] = q * (t / 3.0).cos() - a;
-        ts[1] = q * ((t + 2.0 * std::f32::consts::PI) / 3.0).cos() - a;
-        ts[2] = q * ((t - 2.0 * std::f32::consts::PI) / 3.0).cos() - a;
-        return 3;
-    } else {
-        let aa = -(r.abs() + (r2 - q3).sqrt()).powf(1.0 / 3.0);
-        let aa = if r < 0.0 { -aa } else { aa };
-        let bb = if aa.abs() < 1E-14 { 0.0 } else { q / aa };
-        let a = a / 3.0;
-        ts[0] = (aa + bb) - a;
-        ts[1] = -0.5 * (aa + bb) - a;
-        ts[2] = 0.5 * (3.0f32).sqrt() * (aa - bb);
-        if ts[2].abs() < 1E-14 {
-            return 2;
-        } else {
-            return 1;
-        }
-    }
-}
-
-fn solve_cubic(ts: &mut [f32; 3], a: f32, b: f32, c: f32, d: f32) -> usize {
-    if a.abs() < 1E-14 {
-        let mut tsr = [0.0, 0.0];
-        let tr = solve_quadratic(&mut tsr, b, c, d);
-        ts[0] = tsr[0];
-        ts[1] = tsr[1];
-        tr
-    } else {
-        solve_cubic_normed(ts, b / a, c / a, d / a)
-    }
-}
-
 #[derive(Clone, Debug, Copy)]
 struct PathElement {
     segment: Segment,
@@ -226,6 +152,7 @@ impl PathElement {
                 ctrl: p1,
                 to: p2,
             }) => {
+                use lyon_geom::utils::cubic_polynomial_roots;
                 let qa = p0 - p;
                 let ab = p1 - p0;
                 let br = (p0 - p1) + (p2 - p1);
@@ -233,8 +160,7 @@ impl PathElement {
                 let b = 3.0 * ab.dot(br);
                 let c = 2.0 * ab.dot(ab) + qa.dot(br);
                 let d = qa.dot(ab);
-                let mut ts = [0.0f32, 0.0, 0.0];
-                let solutions = solve_cubic(&mut ts, a, b, c, d);
+                let solutions = cubic_polynomial_roots(a, b, c, d);
 
                 let mut min_dist = ab.cross(qa).signum() * qa.length();
 
@@ -248,17 +174,17 @@ impl PathElement {
                         f = (p - p1).dot(ec) / ec.dot(ec);
                     }
                 }
-                for i in 0..solutions {
-                    if ts[i] <= 0.0 || ts[i] >= 1.0 {
+                for t in solutions {
+                    if t <= 0.0 || 1.0 <= t{
                         continue;
                     }
-                    let endpoint = p0 + (ab * 2.0 * ts[i]) + (br * ts[i] * ts[i]);
+                    let endpoint = p0 + (ab * 2.0 * t) + (br * t * t);
                     let delta = endpoint - p;
                     let dist = (p2 - p0).cross(delta).signum() * delta.length();
 
                     if dist.abs() < min_dist.abs() {
                         min_dist = dist;
-                        f = ts[i];
+                        f = t;
                     }
                 }
 
