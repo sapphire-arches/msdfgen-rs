@@ -623,13 +623,15 @@ fn rescale_contours(mut contours: Vec<Contour>, bounds: lyon_path::math::Rect) -
     } else {
         initial_bounds.size.height
     };
-    let transformation =
-        euclid::Transform2D::create_translation(-initial_bounds.origin.x, -initial_bounds.origin.y)
-            .post_scale(
-                bounds.size.width / initial_scale,
-                bounds.size.height / initial_scale,
-            )
-            .post_translate(bounds.origin.to_vector());
+    let transformation = euclid::Transform2D::create_translation(
+        -initial_bounds.origin.x - initial_bounds.size.width,
+        -initial_bounds.origin.y,
+    )
+    .post_scale(
+        bounds.size.width / initial_scale,
+        bounds.size.height / initial_scale,
+    )
+    .post_translate(bounds.origin.to_vector() + Vector::new(0.5, 0.0));
     for mut contour in &mut contours {
         for mut elem in &mut contour.elements {
             elem.segment = match elem.segment {
