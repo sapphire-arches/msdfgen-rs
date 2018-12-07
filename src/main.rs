@@ -493,7 +493,7 @@ impl ColorFlags {
                 let v = self.bits();
                 let v = (v << (1 + (*seed & 1))) & 0b111;
                 let v = match v.count_ones() {
-                    0 => unreachable!(), /* There should never be 0 bits set */
+                    0 => 0b11,           /* Somehow we lost all the bits. Default to yellow */
                     1 => v | 0b001, /* We just shifted a bit off the left side, add one on the right */
                     2 => v,         /* We already have 2 bits, nothing to do */
                     _ => unreachable!(), /* There should never be 3+ bits set */
@@ -1216,7 +1216,7 @@ fn contour_vbos_for_chr(
     );
     let raw_contours_vbo = contours_vbo(&contours, display, ContourColorMode::TraceContour);
     println!("{:?}", contours);
-    let contours = recolor_contours(contours, Angle::degrees(3.0), 0);
+    let contours = recolor_contours(contours, Angle::degrees(3.0), 1);
     println!("{:?}", font.metrics());
     let msdf = compute_msdf(&contours, 0.5);
     let msdf_min = msdf
