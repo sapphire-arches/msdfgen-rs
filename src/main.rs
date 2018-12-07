@@ -1393,8 +1393,8 @@ void main() {
     )
     .unwrap();
 
-    const default_char: char = '2';
-    let mut render_data = contour_vbos_for_chr(&font, default_char, &display);
+    const DEFAULT_CHAR: char = '4';
+    let mut render_data = contour_vbos_for_chr(&font, DEFAULT_CHAR, &display);
 
     let mut o_down = false;
     let mut draw_outlines = false;
@@ -1477,9 +1477,9 @@ void main() {
                                 draw_outlines = !draw_outlines;
                             }
                             o_down = !o_down;
-                            default_char
+                            DEFAULT_CHAR
                         }
-                        _ => default_char,
+                        _ => DEFAULT_CHAR,
                     };
                     render_data = contour_vbos_for_chr(&font, key, &display);
                 }
