@@ -264,6 +264,7 @@ impl ColorFlags {
                 *seed /= 3;
                 tr
             }
+            ColorFlags::R | ColorFlags::G | ColorFlags::B => self ^ ColorFlags::W,
             _ => {
                 let v = self.bits();
                 let v = (v << (1 + (*seed & 1))) & 0b111;
@@ -617,11 +618,16 @@ fn bounds_for_contours(contours: &[Contour]) -> euclid::TypedRect<f32> {
 
 fn rescale_contours(mut contours: Vec<Contour>, bounds: lyon_path::math::Rect) -> Vec<Contour> {
     let initial_bounds = bounds_for_contours(&contours);
+    let initial_scale = if initial_bounds.size.width > initial_bounds.size.height {
+        initial_bounds.size.width
+    } else {
+        initial_bounds.size.height
+    };
     let transformation =
         euclid::Transform2D::create_translation(-initial_bounds.origin.x, -initial_bounds.origin.y)
             .post_scale(
-                bounds.size.width / initial_bounds.size.width,
-                bounds.size.height / initial_bounds.size.height,
+                bounds.size.width / initial_scale,
+                bounds.size.height / initial_scale,
             )
             .post_translate(bounds.origin.to_vector());
     for mut contour in &mut contours {
@@ -980,7 +986,7 @@ fn contour_vbos_for_chr(
     let contours = get_glyph(&font, chr);
     let contours = rescale_contours(
         contours,
-        euclid::TypedRect::new(Point::new(0.25, 0.25), euclid::TypedSize2D::new(0.5, 0.5)),
+        euclid::TypedRect::new(Point::new(0.2, 0.2), euclid::TypedSize2D::new(0.6, 0.6)),
     );
     let raw_contours_vbo = contours_vbo(&contours, display, ContourColorMode::TraceContour);
     println!("{:?}", contours);
@@ -1168,7 +1174,7 @@ void main() {
     let mut render_data = contour_vbos_for_chr(&font, DEFAULT_CHAR, &display);
 
     let mut o_down = false;
-    let mut draw_outlines = true;
+    let mut draw_outlines = false;
 
     let mut closed = false;
     while !closed {
@@ -1312,19 +1318,5 @@ mod test {
         let (dst, f) = seg.distance(Point::new(0.0, 3.0));
         assert!((dst.distance - 1.0).abs() < 0.0001);
         assert!((f - 1.5).abs() < 0.0001);
-    }
-
-    #[test]
-    fn test_quadratic() {
-        let mut solns = [0.0, 0.0f32];
-        assert!(solve_quadratic(&mut solns, 1.0, -2.0, 1.0) == 2);
-        assert!((solns[0] - 1.0).abs() < 0.001);
-        assert!((solns[1] - 1.0).abs() < 0.001);
-
-        assert!(solve_quadratic(&mut solns, 0.0, 1.0, 1.0) == 1);
-        assert!((solns[0] + 1.0).abs() < 0.001);
-
-        assert!(solve_quadratic(&mut solns, 1.0, 0.0, 1.0) == 1);
-        assert!((solns[0] - 0.0).abs() < 0.001);
     }
 }
