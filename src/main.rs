@@ -1325,6 +1325,26 @@ in vec2 cross_uv;
 in vec3 cross_color;
 out vec4 color;
 
+#define RADIUS 0.01
+#define MULTICOLOR
+
+float band_around(float center, float r, float f) {
+    return smoothstep(center - r, center, f) -
+           smoothstep(center, center + r, f);
+}
+
+float remap(float f) {
+    // return 0.5 * f;
+
+    // return 0.25 * band_around(0.45, RADIUS, f) +
+    //        0.25 * band_around(0.55, RADIUS, f) +
+    //        0.5 * band_around(0.5, RADIUS, f);
+
+    // return band_around(0.5, RADIUS, f);
+
+    return smoothstep(0.5 - RADIUS, 0.5 + RADIUS, f);
+}
+
 void main() {
     // color = vec4(texture(tex, cross_uv).rgb, 1.0);
     // float v = color.b;
@@ -1334,11 +1354,17 @@ void main() {
     //     color = vec4(0.0, vec2(v), 1.0);
     // }
     vec3 x = texture(tex, cross_uv).rgb;
+#ifdef MULTICOLOR
+    x.r = remap(x.r);
+    x.g = remap(x.g);
+    x.b = remap(x.b);
+    color = vec4(x, 1.0);
+#else
     float v = max(min(x.r, x.g), min(max(x.r, x.g), x.b));
-    #define RADIUS 0.01
     // float c = smoothstep(0.5 - RADIUS, 0.5 + RADIUS, texture(tex, cross_uv).r);
-    float c = smoothstep(0.5 - RADIUS, 0.5 + RADIUS, v);
-    color = vec4(c, c, c, 1.0);
+    float c = remap(v);
+    color = vec4(vec3(c), 1.0);
+#endif
 }"#,
         },
     )
