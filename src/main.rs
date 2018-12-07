@@ -23,7 +23,11 @@ fn get_font() -> Font {
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 struct SignedDistance {
+    /// The actual distance
     distance: f32,
+    /// The cosine of the angle between the tangent vector of the path segment
+    /// at the point of closest approach and the vector from the point of
+    /// closest approach to the point to which distance was measured. This is used to
     dot: f32,
 }
 
@@ -1025,7 +1029,8 @@ fn compute_msdf(contours: &[Contour], range: f32) -> Vec<Vec<(f32, f32, f32)>> {
                             contour_min_r.dist.distance,
                             contour_min_g.dist.distance,
                             contour_min_b.dist.distance,
-                        ).abs();
+                        )
+                        .abs();
                         if med_min_dist < d {
                             d = med_min_dist;
                             winding = -windings[i];
@@ -1047,10 +1052,16 @@ fn compute_msdf(contours: &[Contour], range: f32) -> Vec<Vec<(f32, f32, f32)>> {
                         msd.b = contour_min_b.dist.distance;
                         msd.med = med_min_dist;
                         contour_distances.push(msd);
-                        if windings[i] > 0 && med_min_dist >= 0.0 && med_min_dist.abs() < pos_dist.abs() {
+                        if windings[i] > 0
+                            && med_min_dist >= 0.0
+                            && med_min_dist.abs() < pos_dist.abs()
+                        {
                             pos_dist = med_min_dist;
                         }
-                        if windings[i] < 0 && med_min_dist <= 0.0 && med_min_dist.abs() < neg_dist.abs() {
+                        if windings[i] < 0
+                            && med_min_dist <= 0.0
+                            && med_min_dist.abs() < neg_dist.abs()
+                        {
                             neg_dist = med_min_dist;
                         }
                     }
@@ -1091,11 +1102,7 @@ fn compute_msdf(contours: &[Contour], range: f32) -> Vec<Vec<(f32, f32, f32)>> {
                         mmsd.b = sb.dist.distance;
                     }
 
-                    (
-                        mmsd.r,
-                        mmsd.g,
-                        mmsd.b,
-                    )
+                    (mmsd.r, mmsd.g, mmsd.b)
                 })
                 .collect()
         })
