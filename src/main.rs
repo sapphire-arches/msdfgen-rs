@@ -4,6 +4,7 @@ extern crate glium;
 use font_kit::font::Font;
 use glium::{glutin, Surface};
 use lyon_path::math::{Angle, Point, Vector};
+use lyon_path::Segment;
 
 const SDF_DIMENSION: usize = 24;
 
@@ -52,28 +53,6 @@ impl std::cmp::PartialOrd for SignedDistance {
     }
 }
 
-#[derive(Clone, Debug, Copy)]
-enum PathElement {
-    Linear {
-        s: Point,
-        e: Point,
-        color: ColorFlags,
-    },
-    Quadratic {
-        s: Point,
-        e: Point,
-        c: Point,
-        color: ColorFlags,
-    },
-    Cubic {
-        s: Point,
-        e: Point,
-        c1: Point,
-        c2: Point,
-        color: ColorFlags,
-    },
-}
-
 fn median(a: f32, b: f32, c: f32) -> f32 {
     let min = |a: f32, b: f32| a.min(b);
     let max = |a: f32, b: f32| a.max(b);
@@ -90,12 +69,12 @@ fn solve_quadratic(ts: &mut [f32; 2], a: f32, b: f32, c: f32) -> usize {
         }
     } else {
         let dscr = (b * b) - (4.0 * a * c);
-        if dscr > 0.0 {
+        if dscr >= 0.0 {
             let dscr = dscr.sqrt();
             ts[0] = (-b + dscr) / (2.0 * a);
             ts[1] = (-b - dscr) / (2.0 * a);
             2
-        } else if dscr > -1E-14 {
+        } else if dscr < -1E-14 {
             ts[0] = -b / (2.0 * a);
             1
         } else {
@@ -154,169 +133,69 @@ fn solve_cubic(ts: &mut [f32; 3], a: f32, b: f32, c: f32, d: f32) -> usize {
     }
 }
 
+#[derive(Clone, Debug, Copy)]
+struct PathElement {
+    segment: Segment,
+    color: ColorFlags,
+}
+
 impl PathElement {
-    fn sample(&self, f: f32) -> Point {
-        let nf = 1.0f32 - f;
-        match *self {
-            PathElement::Linear { s, e, color: _ } => s * nf + (e * f).to_vector(),
-            PathElement::Quadratic { s, e, c, color: _ } => {
-                s * (nf * nf) + (c * (nf * 2.0f32 * f)).to_vector() + (e * (f * f)).to_vector()
-            }
-            PathElement::Cubic {
-                s,
-                e,
-                c1,
-                c2,
-                color: _,
-            } => {
-                s * (nf * nf * nf)
-                    + (c1 * (nf * 3.0f32 * nf)).to_vector()
-                    + (c2 * (nf * 3.0f32 * f * f)).to_vector()
-                    + (e * (f * f * f)).to_vector()
-            }
+    fn new(segment: Segment, color: ColorFlags) -> PathElement {
+        Self { segment, color }
+    }
+
+    fn sample(&self, t: f32) -> Point {
+        match self.segment {
+            Segment::Line(s) => s.sample(t),
+            Segment::Quadratic(s) => s.sample(t),
+            Segment::Cubic(s) => s.sample(t),
+            Segment::Arc(s) => s.sample(t),
         }
     }
 
     fn direction(&self, f: f32) -> Vector {
-        match *self {
-            PathElement::Linear { s, e, color: _ } => e - s,
-            PathElement::Quadratic { s, e, c, color: _ } => Vector::lerp(&(c - s), e - c, f),
-            PathElement::Cubic {
-                s,
-                e,
-                c1,
-                c2,
-                color: _,
-            } => {
-                let d0 = s - c1;
-                let d1 = c2 - c1;
-                let d2 = e - c2;
-
-                if f < 1E14 {
-                    d0
-                } else if f > 1.0 - 1E14 {
-                    d2
-                } else {
-                    Vector::lerp(&Vector::lerp(&d0, d1, f), Vector::lerp(&d1, d2, f), f)
-                }
-            }
+        use lyon_geom::Segment as SegmentTrait;
+        let f = f.min(1.0).max(0.0);
+        match self.segment {
+            Segment::Line(s) => s.derivative(f),
+            Segment::Quadratic(s) => s.derivative(f),
+            Segment::Cubic(s) => s.derivative(f),
+            Segment::Arc(s) => s.derivative(f),
         }
     }
 
     /// Split a path element into 3rds
     fn split_in_thirds(&self) -> [PathElement; 3] {
-        let a = self.sample(1.0 / 3.0);
-        let b = self.sample(2.0 / 3.0);
-        match *self {
-            PathElement::Linear { s, e, color: col } => [
-                PathElement::Linear {
-                    s: s,
-                    e: a,
-                    color: col,
-                },
-                PathElement::Linear {
-                    s: a,
-                    e: b,
-                    color: col,
-                },
-                PathElement::Linear {
-                    s: b,
-                    e: e,
-                    color: col,
-                },
-            ],
-            PathElement::Quadratic {
-                s,
-                e,
-                c,
-                color: col,
-            } => {
-                // I don't trust this
-                let ca = s.lerp(c, 1.0 / 3.0);
-                let cb = (s.lerp(c, 5.0 / 9.0)).lerp(c.lerp(e, 4.0 / 9.0), 0.5);
-                let cc = c.lerp(e, 2.0 / 3.0);
+        macro_rules! segment_case {
+            ($i:expr, $s:expr) => {{
+                let (a, b) = ($i).split(1.0 / 3.0);
+                let (b, c) = b.split(1.0 / 2.0);
 
-                [
-                    PathElement::Quadratic {
-                        s: s,
-                        e: a,
-                        c: ca,
-                        color: col,
-                    },
-                    PathElement::Quadratic {
-                        s: a,
-                        e: b,
-                        c: cb,
-                        color: col,
-                    },
-                    PathElement::Quadratic {
-                        s: b,
-                        e: e,
-                        c: cc,
-                        color: col,
-                    },
-                ]
-            }
-            PathElement::Cubic {
-                s,
-                e,
-                c1,
-                c2,
-                color: col,
-            } => {
-                // I trust this even less
-
-                // These variable names are read as <start><end><n / 3> lerp
-                let sc11 = s.lerp(c1, 1.0 / 3.0);
-                let sc12 = s.lerp(c1, 2.0 / 3.0);
-                let c1c21 = c1.lerp(c2, 1.0 / 3.0);
-                let c1c22 = c1.lerp(c2, 2.0 / 3.0);
-                let c2e1 = c2.lerp(e, 1.0 / 3.0);
-                let c2e2 = c2.lerp(e, 2.0 / 3.0);
-
-                // These are <segment (a/b/c)<cpoint>
-                let a1 = if (c1 - s).length() < 1E14 { s } else { sc11 };
-                let a2 = sc11.lerp(c1c21, 1.0 / 3.0);
-
-                let b1 = (sc11.lerp(c1c21, 1.0 / 3.0)).lerp(c1c21.lerp(c2e1, 1.0 / 3.0), 2.0 / 3.0);
-                let b2 = (sc12.lerp(c1c22, 2.0 / 3.0)).lerp(c1c22.lerp(c2e2, 2.0 / 3.0), 1.0 / 3.0);
-
-                let c1 = c1c22.lerp(c2e2, 2.0 / 3.0);
-                let c2 = if (e - c2).length() < 1E14 { e } else { c2e2 };
-
-                [
-                    PathElement::Cubic {
-                        s: s,
-                        e: a,
-                        c1: a1,
-                        c2: a2,
-                        color: col,
-                    },
-                    PathElement::Cubic {
-                        s: a,
-                        e: b,
-                        c1: b1,
-                        c2: b2,
-                        color: col,
-                    },
-                    PathElement::Cubic {
-                        s: b,
-                        e: e,
-                        c1: c1,
-                        c2: c2,
-                        color: col,
-                    },
-                ]
-            }
+                [a, b, c]
+                    .into_iter()
+                    .map(|x| PathElement::new(($s)(*x), self.color))
+                    .collect()
+            }};
         }
+        let segments: arrayvec::ArrayVec<[PathElement; 3]> = match self.segment {
+            Segment::Line(s) => segment_case!(s, Segment::Line),
+            Segment::Quadratic(s) => segment_case!(s, Segment::Quadratic),
+            Segment::Cubic(s) => segment_case!(s, Segment::Cubic),
+            Segment::Arc(s) => segment_case!(s, Segment::Arc),
+        };
+
+        segments
+            .into_inner()
+            .expect("We should have precisely the right capacity")
     }
 
     /// Computes the distance from p to this path element
     /// Returns the distance from the point to this path element,
     /// and the distance along this element to the closest point.
     fn distance(&self, p: Point) -> (SignedDistance, f32) {
-        match *self {
-            PathElement::Linear { s, e, .. } => {
+        use lyon_geom::{LineSegment, QuadraticBezierSegment};
+        match self.segment {
+            Segment::Line(LineSegment { from: s, to: e }) => {
                 let aq = p - s;
                 let ab = e - s;
                 let f = aq.dot(ab) / ab.dot(ab);
@@ -342,12 +221,11 @@ impl PathElement {
                 }
             }
 
-            PathElement::Quadratic {
-                s: p0,
-                e: p2,
-                c: p1,
-                ..
-            } => {
+            Segment::Quadratic(QuadraticBezierSegment {
+                from: p0,
+                ctrl: p1,
+                to: p2,
+            }) => {
                 let qa = p0 - p;
                 let ab = p1 - p0;
                 let br = (p0 - p1) + (p2 - p1);
@@ -403,7 +281,7 @@ impl PathElement {
                 }
             }
 
-            PathElement::Cubic { .. } => unimplemented!(),
+            _ => unimplemented!(),
         }
     }
 
@@ -434,37 +312,6 @@ impl PathElement {
             dist
         } else {
             dist
-        }
-    }
-
-    fn set_color(&mut self, col: ColorFlags) {
-        match *self {
-            PathElement::Linear { s, e, .. } => *self = PathElement::Linear { color: col, s, e },
-            PathElement::Quadratic { s, e, c, .. } => {
-                *self = PathElement::Quadratic {
-                    color: col,
-                    s,
-                    e,
-                    c,
-                }
-            }
-            PathElement::Cubic { s, e, c1, c2, .. } => {
-                *self = PathElement::Cubic {
-                    color: col,
-                    s,
-                    e,
-                    c1,
-                    c2,
-                }
-            }
-        }
-    }
-
-    fn color(&self) -> ColorFlags {
-        match *self {
-            PathElement::Linear { color, .. } => color,
-            PathElement::Quadratic { color, .. } => color,
-            PathElement::Cubic { color, .. } => color,
         }
     }
 }
@@ -600,24 +447,27 @@ fn get_glyph(font: &Font, chr: char) -> Vec<Contour> {
 
     impl PathBuilder for PathCollector {
         fn quadratic_bezier_to(&mut self, ctrl: Point, to: Point) {
-            self.elements.push(PathElement::Quadratic {
-                s: self.pen,
-                e: to,
-                c: ctrl,
-                color: ColorFlags::W,
-            });
-
+            self.elements.push(PathElement::new(
+                Segment::Quadratic(lyon_geom::QuadraticBezierSegment {
+                    from: self.pen,
+                    to,
+                    ctrl,
+                }),
+                ColorFlags::W,
+            ));
             self.pen = to;
         }
 
         fn cubic_bezier_to(&mut self, ctrl1: Point, ctrl2: Point, to: Point) {
-            self.elements.push(PathElement::Cubic {
-                s: self.pen,
-                e: to,
-                c1: ctrl1,
-                c2: ctrl2,
-                color: ColorFlags::W,
-            });
+            self.elements.push(PathElement::new(
+                Segment::Cubic(lyon_geom::CubicBezierSegment {
+                    from: self.pen,
+                    to,
+                    ctrl1,
+                    ctrl2,
+                }),
+                ColorFlags::W,
+            ));
 
             self.pen = to;
         }
@@ -636,21 +486,22 @@ fn get_glyph(font: &Font, chr: char) -> Vec<Contour> {
         }
 
         fn line_to(&mut self, to: Point) {
-            self.elements.push(PathElement::Linear {
-                s: self.pen,
-                e: to,
-                color: ColorFlags::W,
-            });
+            self.elements.push(PathElement::new(
+                Segment::Line(lyon_geom::LineSegment { from: self.pen, to }),
+                ColorFlags::W,
+            ));
             self.pen = to;
         }
 
         fn close(&mut self) {
             if (self.pen - self.contour_start).length() > 1E-14 {
-                self.elements.push(PathElement::Linear {
-                    s: self.pen,
-                    e: self.contour_start,
-                    color: ColorFlags::W,
-                });
+                self.elements.push(PathElement::new(
+                    Segment::Line(lyon_geom::LineSegment {
+                        from: self.pen,
+                        to: self.contour_start,
+                    }),
+                    ColorFlags::W,
+                ));
             }
 
             self.pen = self.contour_start;
@@ -759,9 +610,9 @@ fn recolor_contours(contours: Vec<Contour>, threshold: Angle, mut seed: u64) -> 
                             // Only a single edge segment, but it's a teardrop.
                             // We split it in 3 to make the colors happen
                             let mut split = c.elements[0].split_in_thirds();
-                            split[0].set_color(colors[0]);
-                            split[1].set_color(colors[1]);
-                            split[2].set_color(colors[2]);
+                            split[0].color = colors[0];
+                            split[1].color = colors[1];
+                            split[2].color = colors[2];
 
                             c.elements.clear();
                             c.elements.extend_from_slice(&split);
@@ -770,12 +621,12 @@ fn recolor_contours(contours: Vec<Contour>, threshold: Angle, mut seed: u64) -> 
                             // 2 segments. We split it into 6, and assign colors by hand
                             let mut split0 = c.elements[0].split_in_thirds();
                             let mut split1 = c.elements[1].split_in_thirds();
-                            split0[0].set_color(colors[0]);
-                            split0[1].set_color(colors[0]);
-                            split0[2].set_color(colors[1]);
-                            split1[0].set_color(colors[1]);
-                            split1[1].set_color(colors[2]);
-                            split1[2].set_color(colors[2]);
+                            split0[0].color = colors[0];
+                            split0[1].color = colors[0];
+                            split0[2].color = colors[1];
+                            split1[0].color = colors[1];
+                            split1[1].color = colors[2];
+                            split1[2].color = colors[2];
 
                             c.elements.clear();
                             c.elements.extend_from_slice(&split0);
@@ -790,7 +641,7 @@ fn recolor_contours(contours: Vec<Contour>, threshold: Angle, mut seed: u64) -> 
                                 let idx_fractional =
                                     3.5f32 + 2.875f32 * (i as f32) / ((n - 1) as f32) - 1.4375f32;
                                 let idx = idx_fractional.floor() as usize - 2;
-                                e.set_color(colors[idx]);
+                                e.color = colors[idx];
                             }
                         }
                     }
@@ -811,7 +662,7 @@ fn recolor_contours(contours: Vec<Contour>, threshold: Angle, mut seed: u64) -> 
                             spline = spline + 1;
                             color = color.switch_banned(&mut seed, initial_color);
                         }
-                        c.elements[i].set_color(color);
+                        c.elements[i].color = color;
                     }
                     c
                 }
@@ -830,56 +681,37 @@ fn bounds_for_contours(contours: &[Contour]) -> euclid::TypedRect<f32> {
         };
         TypedRect::new(p, TypedSize2D::new(0.0, 0.0))
     };
-    elements.fold(initial, |acc, x| {
-        unimplemented!()
+    elements.fold(initial, |acc, x| match x.segment {
+        Segment::Line(s) => acc.union(&s.bounding_rect()),
+        Segment::Quadratic(s) => acc.union(&s.bounding_rect()),
+        Segment::Cubic(s) => acc.union(&s.bounding_rect()),
+        Segment::Arc(s) => acc.union(&s.bounding_rect()),
     })
 }
 
-fn rescale_contours(contours: Vec<Contour>, bounds: lyon_path::math::Rect) -> Vec<Contour> {
+fn rescale_contours(mut contours: Vec<Contour>, bounds: lyon_path::math::Rect) -> Vec<Contour> {
     let initial_bounds = bounds_for_contours(&contours);
-    let reproject = |p: Point| {
-        return Point::new(
-            (p.x - bounds.origin.x) / bounds.size.width,
-            (p.y - bounds.origin.y) / bounds.size.height,
-        );
-    };
+    let transformation =
+        euclid::Transform2D::create_translation(-initial_bounds.origin.x, -initial_bounds.origin.y)
+            .post_scale(
+                bounds.size.width / initial_bounds.size.width,
+                bounds.size.height / initial_bounds.size.height,
+            )
+            .post_translate(bounds.origin.to_vector());
+    for mut contour in &mut contours {
+        for mut elem in &mut contour.elements {
+            elem.segment = match elem.segment {
+                Segment::Line(s) => Segment::Line(s.transform(&transformation)),
+                Segment::Quadratic(s) => Segment::Quadratic(s.transform(&transformation)),
+                Segment::Cubic(s) => Segment::Cubic(s.transform(&transformation)),
+                Segment::Arc(s) => Segment::Arc(lyon_geom::Arc {
+                    center: transformation.transform_point(&s.center),
+                    ..s
+                }),
+            }
+        }
+    }
     contours
-        .into_iter()
-        .map(|contour| {
-            let elements: Vec<_> = contour
-                .elements
-                .into_iter()
-                .map(|elem| match elem {
-                    PathElement::Linear { s, e, color } => PathElement::Linear {
-                        s: reproject(s),
-                        e: reproject(e),
-                        color,
-                    },
-                    PathElement::Quadratic { s, e, c, color } => PathElement::Quadratic {
-                        s: reproject(s),
-                        e: reproject(e),
-                        c: reproject(c),
-                        color,
-                    },
-                    PathElement::Cubic {
-                        s,
-                        e,
-                        c1,
-                        c2,
-                        color,
-                    } => PathElement::Cubic {
-                        s: reproject(s),
-                        e: reproject(e),
-                        c1: reproject(c1),
-                        c2: reproject(c2),
-                        color,
-                    },
-                })
-                .collect();
-
-            Contour { elements }
-        })
-        .collect()
 }
 
 #[derive(Copy, Clone)]
@@ -926,7 +758,7 @@ fn contours_vbo(
                         ContourColorMode::TraceContour => {
                             [c_color[0] * cf, c_color[1] * cf, c_color[2] * cf]
                         }
-                        ContourColorMode::EdgeColors => elem.color().float_color(),
+                        ContourColorMode::EdgeColors => elem.color.float_color(),
                     },
                 });
             }
@@ -1015,17 +847,17 @@ fn compute_msdf(contours: &[Contour], dim: usize) -> Vec<Vec<(f32, f32, f32)>> {
                         for elem in &contour.elements {
                             let (d, na) = elem.distance(p.to_point());
 
-                            if elem.color().contains(ColorFlags::R) && d < contour_min_r.dist {
+                            if elem.color.contains(ColorFlags::R) && d < contour_min_r.dist {
                                 contour_min_r.dist = d;
                                 contour_min_r.edge = Some(&elem);
                                 contour_min_r.nearest_approach = na;
                             }
-                            if elem.color().contains(ColorFlags::G) && d < contour_min_g.dist {
+                            if elem.color.contains(ColorFlags::G) && d < contour_min_g.dist {
                                 contour_min_g.dist = d;
                                 contour_min_g.edge = Some(&elem);
                                 contour_min_g.nearest_approach = na;
                             }
-                            if elem.color().contains(ColorFlags::B) && d < contour_min_b.dist {
+                            if elem.color.contains(ColorFlags::B) && d < contour_min_b.dist {
                                 contour_min_b.dist = d;
                                 contour_min_b.edge = Some(&elem);
                                 contour_min_b.nearest_approach = na;
@@ -1506,14 +1338,19 @@ void main() {
 #[cfg(test)]
 mod test {
     use super::*;
+    use lyon_geom::LineSegment;
+
+    fn line_segment(p0: Point, p1: Point) -> Segment {
+        Segment::Line(LineSegment { from: p0, to: p1 })
+    }
+
+    fn line_element(p0: Point, p1: Point) -> PathElement {
+        PathElement::new(line_segment(p0, p1), ColorFlags::W)
+    }
 
     #[test]
     fn test_line_dist_x() {
-        let seg = PathElement::Linear {
-            s: Point::new(0.0, 0.0),
-            e: Point::new(2.0, 0.0),
-            color: ColorFlags::W,
-        };
+        let seg = line_element(Point::new(0.0, 0.0), Point::new(2.0, 0.0));
         let (dst, f) = seg.distance(Point::new(1.0, 1.0));
         assert!((dst.distance + 1.0).abs() < 0.0001);
         assert!((f - 0.5).abs() < 0.0001);
@@ -1533,11 +1370,7 @@ mod test {
 
     #[test]
     fn test_line_dist_y() {
-        let seg = PathElement::Linear {
-            s: Point::new(0.0, 0.0),
-            e: Point::new(0.0, 2.0),
-            color: ColorFlags::W,
-        };
+        let seg = line_element(Point::new(0.0, 0.0), Point::new(0.0, 2.0));
         let (dst, f) = seg.distance(Point::new(1.0, 1.0));
         assert!((dst.distance - 1.0).abs() < 0.0001);
         assert!((f - 0.5).abs() < 0.0001);
@@ -1563,7 +1396,7 @@ mod test {
         assert!((solns[1] - 1.0).abs() < 0.001);
 
         assert!(solve_quadratic(&mut solns, 0.0, 1.0, 1.0) == 1);
-        assert!((solns[0] - 1.0).abs() < 0.001);
+        assert!((solns[0] + 1.0).abs() < 0.001);
 
         assert!(solve_quadratic(&mut solns, 1.0, 0.0, 1.0) == 1);
         assert!((solns[0] - 0.0).abs() < 0.001);
