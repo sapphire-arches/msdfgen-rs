@@ -1265,7 +1265,8 @@ fn contour_vbos_for_chr(
 
 fn main() {
     let mut events_loop = glutin::EventsLoop::new();
-    let window = glutin::WindowBuilder::new();
+    let window = glutin::WindowBuilder::new()
+        .with_dimensions((600, 600).into());
     let context = glutin::ContextBuilder::new();
     let context = context.with_gl_profile(glutin::GlProfile::Core);
     let context = context.with_gl_debug_flag(true);
@@ -1327,6 +1328,7 @@ out vec4 color;
 
 #define RADIUS 0.01
 #define MULTICOLOR
+// #define COLOR_SIDES
 
 float band_around(float center, float r, float f) {
     return smoothstep(center - r, center, f) -
@@ -1340,19 +1342,12 @@ float remap(float f) {
     //        0.25 * band_around(0.55, RADIUS, f) +
     //        0.5 * band_around(0.5, RADIUS, f);
 
-    // return band_around(0.5, RADIUS, f);
+    return band_around(0.5, RADIUS, f);
 
-    return smoothstep(0.5 - RADIUS, 0.5 + RADIUS, f);
+    // return smoothstep(0.5 - RADIUS, 0.5 + RADIUS, f);
 }
 
 void main() {
-    // color = vec4(texture(tex, cross_uv).rgb, 1.0);
-    // float v = color.b;
-    // if (v > 0.5) {
-    //     color = vec4(vec2(v), 0.0, 1.0);
-    // } else {
-    //     color = vec4(0.0, vec2(v), 1.0);
-    // }
     vec3 x = texture(tex, cross_uv).rgb;
 #ifdef MULTICOLOR
     x.r = remap(x.r);
@@ -1360,10 +1355,19 @@ void main() {
     x.b = remap(x.b);
     color = vec4(x, 1.0);
 #else
+#ifdef COLOR_SIDES
+    float v = x.r;
+    if (v > 0.5) {
+        color = vec4(1.0 - (vec2(v) * 2.0 - 1.0), 0.0, 1.0);
+    } else {
+        color = vec4(0.0, vec2(v) * 2.0, 1.0);
+    }
+#else
     float v = max(min(x.r, x.g), min(max(x.r, x.g), x.b));
     // float c = smoothstep(0.5 - RADIUS, 0.5 + RADIUS, texture(tex, cross_uv).r);
     float c = remap(v);
     color = vec4(vec3(c), 1.0);
+#endif
 #endif
 }"#,
         },
@@ -1397,7 +1401,7 @@ void main() {
     let mut render_data = contour_vbos_for_chr(&font, DEFAULT_CHAR, &display);
 
     let mut o_down = false;
-    let mut draw_outlines = false;
+    let mut draw_outlines = true;
 
     let mut closed = false;
     while !closed {
