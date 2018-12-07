@@ -175,7 +175,7 @@ impl PathElement {
                     }
                 }
                 for t in solutions {
-                    if t <= 0.0 || 1.0 <= t{
+                    if t <= 0.0 || 1.0 <= t {
                         continue;
                     }
                     let endpoint = p0 + (ab * 2.0 * t) + (br * t * t);
