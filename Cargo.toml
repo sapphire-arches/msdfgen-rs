@@ -1,5 +1,5 @@
 [package]
-name = "fontexp"
+name = "msdfgen"
 version = "0.1.0"
 authors = ["bobtwinkles <srkoser+GitHub@gmail.com>"]
 edition = "2018"
