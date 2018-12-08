@@ -10,9 +10,8 @@ mod utils;
 
 use self::math::median;
 use self::path::ColorFlags;
-use self::utils::{EdgePoint};
-use lyon_path::math::{Angle, Point, Vector};
-use lyon_path::Segment;
+use self::utils::EdgePoint;
+use lyon_path::math::{Angle, Vector};
 
 pub use self::path::{Contour, PathCollector};
 

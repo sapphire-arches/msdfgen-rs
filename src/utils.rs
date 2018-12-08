@@ -1,8 +1,7 @@
 //! Utilities for the SDF computations
 
-use lyon_path::math::{Angle, Point, Vector};
-use lyon_path::Segment;
 use crate::path::PathElement;
+use lyon_path::math::Vector;
 
 /// Represents a distance to an edge segment
 /// TODO: rename this to EdgeDistance
