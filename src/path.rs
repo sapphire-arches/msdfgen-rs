@@ -1,6 +1,6 @@
 //! Things related to our augmented path structure
 
-use crate::utils::SignedDistance;
+use crate::utils::AugmentedDistance;
 use lyon_path::builder::{FlatPathBuilder, PathBuilder};
 use lyon_path::math::{Angle, Point, Vector};
 use lyon_path::Segment;
@@ -171,7 +171,7 @@ impl PathElement {
     /// Computes the distance from p to this path element
     /// Returns the distance from the point to this path element,
     /// and the distance along this element to the closest point.
-    pub fn distance(&self, p: Point) -> (SignedDistance, f32) {
+    pub fn distance(&self, p: Point) -> (AugmentedDistance, f32) {
         use lyon_geom::{LineSegment, QuadraticBezierSegment};
         match self.segment {
             Segment::Line(LineSegment { from: s, to: e }) => {
@@ -181,7 +181,7 @@ impl PathElement {
                 let eq = if f >= 0.5 { p - e } else { p - s };
 
                 let dist_to_endpoint = eq.length();
-                let endpoint_sd = SignedDistance::new(
+                let endpoint_sd = AugmentedDistance::new(
                     aq.cross(ab).signum() * dist_to_endpoint,
                     // ab.normalize().cross(eq.normalize()),
                     ab.normalize().dot(eq.normalize()).abs(),
@@ -191,7 +191,7 @@ impl PathElement {
                     let ortho = Vector::new(ab.y, -ab.x).normalize();
                     let ortho_dist = ortho.dot(aq);
                     if ortho_dist.abs() < endpoint_sd.distance.abs() {
-                        (SignedDistance::new(ortho_dist, 0.0), f)
+                        (AugmentedDistance::new(ortho_dist, 0.0), f)
                     } else {
                         (endpoint_sd, f)
                     }
@@ -242,16 +242,16 @@ impl PathElement {
                 }
 
                 if 0.0 <= f && f <= 1.0 {
-                    (SignedDistance::new(min_dist, 0.0), f)
-                // (SignedDistance::new(200f32, 0.0), f)
+                    (AugmentedDistance::new(min_dist, 0.0), f)
+                // (AugmentedDistance::new(200f32, 0.0), f)
                 } else if f < 0.5 {
                     (
-                        SignedDistance::new(min_dist, ab.normalize().dot(qa.normalize()).abs()),
+                        AugmentedDistance::new(min_dist, ab.normalize().dot(qa.normalize()).abs()),
                         f,
                     )
                 } else {
                     (
-                        SignedDistance::new(
+                        AugmentedDistance::new(
                             min_dist,
                             (p2 - p1).normalize().dot((p2 - p).normalize()).abs(),
                         ),
@@ -266,10 +266,10 @@ impl PathElement {
 
     pub(crate) fn to_psuedodistance(
         &self,
-        dist: SignedDistance,
+        dist: AugmentedDistance,
         p: Vector,
         near: f32,
-    ) -> SignedDistance {
+    ) -> AugmentedDistance {
         if near <= 0.0 {
             let dir = self.direction(0.0).normalize();
             let aq = p - self.sample(0.0).to_vector();
@@ -277,7 +277,7 @@ impl PathElement {
             if ts < 0.0 {
                 let ds = aq.cross(dir);
                 if ds.abs() <= dist.distance.abs() {
-                    return SignedDistance::new(ds, 0.0);
+                    return AugmentedDistance::new(ds, 0.0);
                 }
             }
 
@@ -289,7 +289,7 @@ impl PathElement {
             if ts > 0.0 {
                 let ds = aq.cross(dir);
                 if ds.abs() <= dist.distance.abs() {
-                    return SignedDistance::new(ds, 0.0);
+                    return AugmentedDistance::new(ds, 0.0);
                 }
             }
 

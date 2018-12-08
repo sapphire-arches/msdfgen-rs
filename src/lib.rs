@@ -10,8 +10,7 @@ mod utils;
 
 use self::math::median;
 use self::path::ColorFlags;
-use self::path::PathElement;
-use self::utils::{EdgePoint, SignedDistance};
+use self::utils::{EdgePoint};
 use lyon_path::math::{Angle, Point, Vector};
 use lyon_path::Segment;
 

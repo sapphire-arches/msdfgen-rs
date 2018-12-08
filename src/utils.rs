@@ -8,7 +8,7 @@ use crate::path::PathElement;
 /// TODO: rename this to EdgeDistance
 #[derive(Copy, Clone)]
 pub(crate) struct EdgePoint<'a> {
-    pub(crate) dist: SignedDistance,
+    pub(crate) dist: AugmentedDistance,
     pub(crate) edge: Option<&'a PathElement>,
     pub(crate) nearest_approach: f32,
 }
@@ -17,7 +17,7 @@ impl<'a> EdgePoint<'a> {
     /// Create a new edge point, initialized to infinite distance
     pub(crate) fn new() -> Self {
         Self {
-            dist: SignedDistance::new(-1e24, 0.0),
+            dist: AugmentedDistance::new(-1e24, 0.0),
             edge: None,
             nearest_approach: 0.0,
         }
@@ -35,7 +35,7 @@ impl<'a> EdgePoint<'a> {
 /// between the tangent of the edge and the vector from the
 /// point of nearest approach to the measured point.
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct SignedDistance {
+pub struct AugmentedDistance {
     /// The actual distance
     pub(crate) distance: f32,
     /// The cosine of the angle between the tangent vector of the path segment
@@ -44,13 +44,13 @@ pub struct SignedDistance {
     dot: f32,
 }
 
-impl SignedDistance {
+impl AugmentedDistance {
     pub(crate) fn new(distance: f32, dot: f32) -> Self {
         Self { distance, dot }
     }
 }
 
-impl std::cmp::PartialOrd for SignedDistance {
+impl std::cmp::PartialOrd for AugmentedDistance {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         use std::cmp::Ordering;
 
