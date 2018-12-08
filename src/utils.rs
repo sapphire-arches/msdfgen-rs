@@ -4,15 +4,14 @@ use crate::path::PathElement;
 use lyon_path::math::Vector;
 
 /// Represents a distance to an edge segment
-/// TODO: rename this to EdgeDistance
 #[derive(Copy, Clone)]
-pub(crate) struct EdgePoint<'a> {
+pub(crate) struct EdgeDistance<'a> {
     pub(crate) dist: AugmentedDistance,
     pub(crate) edge: Option<&'a PathElement>,
     pub(crate) nearest_approach: f32,
 }
 
-impl<'a> EdgePoint<'a> {
+impl<'a> EdgeDistance<'a> {
     /// Create a new edge point, initialized to infinite distance
     pub(crate) fn new() -> Self {
         Self {

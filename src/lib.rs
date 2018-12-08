@@ -10,7 +10,7 @@ mod utils;
 
 use self::math::median;
 use self::path::ColorFlags;
-use self::utils::EdgePoint;
+use self::utils::EdgeDistance;
 use lyon_path::math::{Angle, Vector};
 
 pub use self::path::{Contour, PathCollector};
@@ -60,14 +60,14 @@ pub fn compute_msdf(contours: &[Contour], dim: usize) -> Vec<Vec<(f32, f32, f32)
                     let mut contour_distances = Vec::new();
                     contour_distances.reserve(contours.len());
 
-                    let mut sr = EdgePoint::new();
-                    let mut sg = EdgePoint::new();
-                    let mut sb = EdgePoint::new();
+                    let mut sr = EdgeDistance::new();
+                    let mut sg = EdgeDistance::new();
+                    let mut sb = EdgeDistance::new();
 
                     for (i, contour) in contours.iter().enumerate() {
-                        let mut contour_min_r = EdgePoint::new();
-                        let mut contour_min_g = EdgePoint::new();
-                        let mut contour_min_b = EdgePoint::new();
+                        let mut contour_min_r = EdgeDistance::new();
+                        let mut contour_min_g = EdgeDistance::new();
+                        let mut contour_min_b = EdgeDistance::new();
 
                         for elem in &contour.elements {
                             let (d, na) = elem.distance(p.to_point());
@@ -208,7 +208,7 @@ pub fn compute_sdf(contours: &[Contour], dim: usize) -> Vec<Vec<f32>> {
                     contour_distances.reserve(contours.len());
 
                     for (i, contour) in contours.iter().enumerate() {
-                        let mut contour_min = EdgePoint::new();
+                        let mut contour_min = EdgeDistance::new();
 
                         for elem in contour.elements.iter() {
                             let (d, na) = elem.distance(p.to_point());
