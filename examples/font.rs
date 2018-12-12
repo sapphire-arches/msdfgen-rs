@@ -163,40 +163,14 @@ fn contour_vbos_for_chr(
     let contours = recolor_contours(contours, Angle::degrees(3.0), 1);
     println!("{:?}", font.metrics());
     let msdf = compute_msdf(&contours, SDF_DIMENSION);
-    let msdf_min = msdf
-        .iter()
-        .flat_map(|x| x)
-        .map(|x| x.0.min(x.1.min(x.2)))
-        .fold(1e24, |acc, x| if x < acc { x } else { acc });
-    let msdf_max = msdf
-        .iter()
-        .flat_map(|x| x)
-        .map(|x| x.0.max(x.1.max(x.2)))
-        .fold(-1e24, |acc, x| if x > acc { x } else { acc });
-    let msdf_mag = 2.0 * msdf_max.abs().max(msdf_min.abs());
-    let msdf: Vec<Vec<(f32, f32, f32)>> = msdf
-        .into_iter()
-        .map(|ys| {
-            ys.into_iter()
-                .map(|x| {
-                    let remap = |v: f32| {
-                        (v / msdf_mag) + 0.5
-                        // if v < 0.0 {
-                        //     (v - msdf_min) / (2.0 * -msdf_min)
-                        // } else {
-                        //     0.5 + v / (2.0 * msdf_max)
-                        // }
-                    };
-                    (
-                        remap(x.0), // (x.0 - msdf_min) / (msdf_max - msdf_min),
-                        remap(x.1), // (x.1 - msdf_min) / (msdf_max - msdf_min),
-                        remap(x.2), // (x.2 - msdf_min) / (msdf_max - msdf_min),
-                    )
-                })
-                .collect()
-        })
-        .collect();
-    let msdf = glium::texture::texture2d::Texture2d::new(display, msdf).unwrap();
+    use glium::texture::{MipmapsOption, UncompressedFloatFormat};
+    let msdf = glium::texture::texture2d::Texture2d::with_format(
+        display,
+        msdf,
+        UncompressedFloatFormat::F16F16F16,
+        MipmapsOption::NoMipmap,
+    )
+    .unwrap();
 
     let contours_vbo = contours_vbo(&contours, display, ContourColorMode::EdgeColors);
 
@@ -287,7 +261,7 @@ float remap(float f) {
 
     // return band_around(0.5, RADIUS, f);
 
-    return smoothstep(0.5 - RADIUS, 0.5 + RADIUS, f);
+    return smoothstep(-RADIUS, RADIUS, f);
 }
 
 void main() {

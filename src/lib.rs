@@ -16,7 +16,8 @@ use lyon_path::math::{Angle, Vector};
 pub use self::path::{Contour, PathCollector};
 
 /// Computes an MSDF from a list of contours. The returned vectors are a `dim` by `dim`
-/// matrix of signed distance values.
+/// matrix of signed distance values. The output represents the signed distances to the contours
+/// within [0, 1] x [0, 1]
 pub fn compute_msdf(contours: &[Contour], dim: usize) -> Vec<Vec<(f32, f32, f32)>> {
     #[derive(Copy, Clone, PartialEq)]
     struct MultiDistance {
@@ -176,7 +177,7 @@ pub fn compute_msdf(contours: &[Contour], dim: usize) -> Vec<Vec<(f32, f32, f32)
                         mmsd.b = sb.dist.distance;
                     }
 
-                    (mmsd.r, mmsd.g, mmsd.b)
+                    (mmsd.r / 0.5, mmsd.g / 0.5, mmsd.b / 0.5)
                 })
                 .collect()
         })
@@ -184,7 +185,8 @@ pub fn compute_msdf(contours: &[Contour], dim: usize) -> Vec<Vec<(f32, f32, f32)
 }
 
 /// Computes a SDF from a list of contours. The returned vectors are a `dim` by `dim`
-/// matrix of signed distances.
+/// matrix of signed distances. The output represents the signed distances to the contours
+/// within [0, 1] x [0, 1]
 pub fn compute_sdf(contours: &[Contour], dim: usize) -> Vec<Vec<f32>> {
     let scale: f32 = 1.0 / (dim as f32);
     let windings: Vec<i32> = contours.iter().map(|c| c.winding() as i32).collect();
@@ -259,7 +261,7 @@ pub fn compute_sdf(contours: &[Contour], dim: usize) -> Vec<Vec<f32>> {
                         }
                     }
 
-                    md
+                    md / 0.5
                 })
                 .collect()
         })
