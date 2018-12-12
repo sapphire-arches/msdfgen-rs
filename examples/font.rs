@@ -57,20 +57,17 @@ fn bounds_for_contours(contours: &[Contour]) -> euclid::TypedRect<f32> {
 
 fn rescale_contours(mut contours: Vec<Contour>, bounds: lyon_path::math::Rect) -> Vec<Contour> {
     let initial_bounds = bounds_for_contours(&contours);
-    let initial_scale = if initial_bounds.size.width > initial_bounds.size.height {
-        initial_bounds.size.width
-    } else {
-        initial_bounds.size.height
-    };
+    let initial_scale = initial_bounds.size.width.max(initial_bounds.size.height);
+    let bounds_scale = bounds.size.width.max(bounds.size.height);
     let transformation = euclid::Transform2D::create_translation(
-        -initial_bounds.origin.x - initial_bounds.size.width,
+        -initial_bounds.origin.x,
         -initial_bounds.origin.y,
     )
     .post_scale(
-        bounds.size.width / initial_scale,
-        bounds.size.height / initial_scale,
+        bounds_scale / initial_scale,
+        bounds_scale / initial_scale,
     )
-    .post_translate(bounds.origin.to_vector() + Vector::new(0.5, 0.0));
+    .post_translate(bounds.origin.to_vector());
     for mut contour in &mut contours {
         for mut elem in &mut contour.elements {
             elem.segment = match elem.segment {
