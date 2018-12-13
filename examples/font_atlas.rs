@@ -121,8 +121,8 @@ impl RenderChar {
 }
 
 /// The information about a glyph that gets cached in the font atlas.
-/// Since we rescale the contours non-uniformly to make maximum use of the MSDF pixels,
-/// we need to keep track of the offset and scale from EM space. This
+/// Since every letter has a different scaling factor to make maximum use of the MSDF pixels,
+/// we need to keep track of the offset and scale from font unit space. This
 /// information is required when positioning characters to get the right scale
 /// and positioning for the geometry.
 #[derive(Clone, Copy, Debug)]
@@ -130,8 +130,8 @@ struct GlyphInformation {
     id: u32,
     /// Where it actually is in the atlas texture
     uv: Rect<f32>,
-    /// The em-space rectangle covered by the uv rectangle
-    em: Rect<f32>,
+    /// The font-space rectangle covered by the uv rectangle
+    font_units: Rect<f32>,
 }
 
 struct FontAtlas<'font, 'facade, T: Facade> {
@@ -193,14 +193,14 @@ impl<'font, 'facade, T: Facade> FontAtlas<'font, 'facade, T> {
         if !self.locations.contains_key(&c) {
             const INIT_UV_BORDER: f32 = 0.2;
             const UV_BORDER: f32 = 0.1;
-            let (glyph_id, contours, em_rect) = get_glyph(self.font, c);
+            let (glyph_id, contours, font_unit_rect) = get_glyph(self.font, c);
             let uv_rect = Rect::new(
                 Point::new(INIT_UV_BORDER, INIT_UV_BORDER),
                 euclid::TypedSize2D::new(1.0 - 2.0 * INIT_UV_BORDER, 1.0 - 2.0 * INIT_UV_BORDER),
             );
-            let (contours, transform) = rescale_contours(contours, em_rect, uv_rect);
+            let (contours, transform) = rescale_contours(contours, font_unit_rect, uv_rect);
 
-            // Build the contours and upload them to the texture
+            // Build the contours and upload thfont_unit to the texture
             let contours = recolor_contours(contours, Angle::degrees(3.0), 1);
             let msdf = compute_msdf(&contours, self.char_dim as usize);
             self.tex.write(
@@ -213,14 +213,14 @@ impl<'font, 'facade, T: Facade> FontAtlas<'font, 'facade, T> {
                 msdf,
             );
 
-            // Compute the final positions of the em and uv rectangles
+            // Compute the final positions of the font_unit and uv rectangles
             // transform should just be a scale and transform, easily invertable
             let inv_transform = transform.inverse().unwrap();
             let uv_rect = Rect::new(
                 Point::new(UV_BORDER, UV_BORDER),
                 euclid::TypedSize2D::new(1.0 - 2.0 * UV_BORDER, 1.0 - 2.0 * UV_BORDER),
             );
-            let em_rect = inv_transform.transform_rect(&uv_rect);
+            let font_unit_rect = inv_transform.transform_rect(&uv_rect);
             let alloc_scale = 1.0 / self.alloced_size as f32;
             let uv_rect = uv_rect.scale(
                 self.char_dim as f32 * alloc_scale,
@@ -239,7 +239,7 @@ impl<'font, 'facade, T: Facade> FontAtlas<'font, 'facade, T> {
             let tr = GlyphInformation {
                 id: glyph_id,
                 uv: uv_rect,
-                em: em_rect,
+                font_units: font_unit_rect,
             };
 
             self.locations.insert(c, tr);
@@ -249,23 +249,23 @@ impl<'font, 'facade, T: Facade> FontAtlas<'font, 'facade, T> {
 
     /// Layout a string.
     /// TODO: hide things with interior mutability so that this doesn't take &mut
-    fn layout_string(&mut self, s: &str) -> Vec<RenderChar> {
-        let mut pen = Vector::new(0.0, 0.0);
+    fn layout_string(&mut self, start: Point, size_in_em: f32, s: &str) -> Vec<RenderChar> {
         let metrics = self.font.metrics();
-        let baseline = metrics.units_per_em;
         let mut tr = Vec::new();
-        let transform = euclid::Transform2D::create_scale(4.0 / 65536.0, 4.0 / 65536.0)
-            .post_translate(Vector::new(-0.90, -0.50));
+        let scale = size_in_em / metrics.units_per_em as f32;
+        let mut transform = euclid::Transform2D::create_scale(scale, scale)
+            .post_translate(start.to_vector() + Vector::new(0.0, metrics.descent * -scale));
         for c in s.chars() {
             let information = self.character_information(c);
             tr.push(RenderChar {
-                verts: transform.transform_rect(&information.em.translate(&pen)),
+                verts: transform.transform_rect(&information.font_units),
                 uv: information.uv,
             });
-            pen += self
-                .font
-                .advance(information.id)
-                .unwrap_or(Vector::new(0.0, 0.0));
+            transform = transform.post_translate(
+                self.font
+                    .advance(information.id)
+                    .unwrap_or(Vector::new(0.0, 0.0)) * scale,
+            );
         }
 
         tr
@@ -274,12 +274,14 @@ impl<'font, 'facade, T: Facade> FontAtlas<'font, 'facade, T> {
 
 fn main() {
     let mut events_loop = glutin::EventsLoop::new();
-    let window = glutin::WindowBuilder::new().with_dimensions((512, 512).into());
+    let mut window_size = (512, 512);
+    let window = glutin::WindowBuilder::new().with_dimensions(window_size.into());
     let context = glutin::ContextBuilder::new();
     let context = context.with_gl_profile(glutin::GlProfile::Core);
     let context = context.with_gl_debug_flag(true);
     let display =
         glium::Display::new(window, context, &events_loop).expect("Error creating GL display");
+    let hidpi_factor = display.gl_window().window().get_hidpi_factor() as f32;
 
     let font = get_font();
 
@@ -293,8 +295,10 @@ in vec3 color;
 out vec3 cross_color;
 out vec2 cross_uv;
 
+uniform mat4 transform;
+
 void main() {
-    gl_Position = vec4(position, 0.0, 1.0);
+    gl_Position = vec4(position, 0.0, 1.0) * transform;
     cross_color = color;
     cross_uv = uv;
 }"#,
@@ -331,8 +335,10 @@ void main() {
     let mut font_atlas =
         FontAtlas::build(SDF_DIMENSION, &font, &display).expect("Failed to build font atlas");
     let layout = font_atlas.layout_string(
-        // "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()`~'\";/.,<>?",
-        ":{<~The lazy cat jumps over the xenophobic dog, yodeling~>}",
+        Point::new(30.0, 30.0),
+        8.0,
+        // ":{<~The lazy cat jumps over the xenophobic dog, yodeling~>}",
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()`~'\";/.,<>?",
     );
     eprintln!("{:?}", layout);
     let mut vertices = Vec::with_capacity(layout.len() * 4);
@@ -364,11 +370,17 @@ void main() {
             ..Default::default()
         };
 
+        let transform = euclid::Transform3D::create_translation(0.0, 0.0, 0.0)
+            .pre_translate(euclid::Vector3D::new(-1.0, -1.0, 0.0))
+            .pre_scale(1.0 / (window_size.0 as f32), 1.0 / (window_size.1 as f32), 1.0)
+            .pre_scale(hidpi_factor, hidpi_factor, hidpi_factor);
+
         let mut target = display.draw();
         target.clear_color(0.0, 0.0, 0.0, 1.0);
 
         let uniforms = uniform!(
-            tex: font_atlas.tex.sampled(), //.wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
+            tex: font_atlas.tex.sampled(),
+            transform: transform.to_column_arrays(),
         );
 
         target
@@ -383,6 +395,9 @@ void main() {
                 glutin::WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
                     _ => {}
                 },
+                glutin::WindowEvent::Resized(new_size) => {
+                    window_size = (new_size.width as u32, new_size.height as u32)
+                }
                 _ => {}
             },
             _ => {}
