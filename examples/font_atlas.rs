@@ -21,10 +21,10 @@ fn get_font() -> Font {
 
     source
         .select_best_match(
-            &[FamilyName::Monospace],
+            &[FamilyName::Serif],
             Properties::new().style(Style::Normal),
         )
-        .unwrap()
+        .expect("Failed to select a good font")
         .load()
         .unwrap()
 }
@@ -249,10 +249,11 @@ impl<'font, 'facade, T: Facade> FontAtlas<'font, 'facade, T> {
 
     /// Layout a string.
     /// TODO: hide things with interior mutability so that this doesn't take &mut
-    fn layout_string(&mut self, start: Point, size_in_em: f32, s: &str) -> Vec<RenderChar> {
+    fn layout_string(&mut self, start: Point, size_in_points: f32, s: &str) -> Vec<RenderChar> {
         let metrics = self.font.metrics();
+        eprintln!("{:?}", metrics);
         let mut tr = Vec::new();
-        let scale = size_in_em / metrics.units_per_em as f32;
+        let scale = size_in_points / metrics.units_per_em as f32;
         let mut transform = euclid::Transform2D::create_scale(scale, scale)
             .post_translate(start.to_vector() + Vector::new(0.0, metrics.descent * -scale));
         for c in s.chars() {
@@ -274,8 +275,8 @@ impl<'font, 'facade, T: Facade> FontAtlas<'font, 'facade, T> {
 
 fn main() {
     let mut events_loop = glutin::EventsLoop::new();
-    let mut window_size = (512u32, 512);
-    let window = glutin::WindowBuilder::new().with_dimensions(window_size.into());
+    let mut window_size: glutin::dpi::LogicalSize = (512u32, 512).into();
+    let window = glutin::WindowBuilder::new().with_dimensions(window_size);
     let context = glutin::ContextBuilder::new();
     let context = context.with_gl_profile(glutin::GlProfile::Core);
     let context = context.with_gl_debug_flag(true);
@@ -336,12 +337,11 @@ void main() {
     let mut font_atlas =
         FontAtlas::build(SDF_DIMENSION, &font, &display).expect("Failed to build font atlas");
     let layout = font_atlas.layout_string(
-        Point::new(30.0, 30.0),
+        Point::new(72.0, 72.0),
         16.0,
         // ":{<~The lazy cat jumps over the xenophobic dog, yodeling~>}",
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()`~'\";/.,<>?",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()`~'\";/.,<>?",
     );
-    eprintln!("{:?}", layout);
     let mut vertices = Vec::with_capacity(layout.len() * 4);
     let mut indices = Vec::with_capacity(layout.len() * 5);
     for c in &layout {
@@ -371,9 +371,13 @@ void main() {
             ..Default::default()
         };
 
-        let transform = euclid::Transform3D::create_translation(0.0, 0.0, 0.0)
-            .pre_translate(euclid::Vector3D::new(-1.0, -1.0, 0.0))
-            .pre_scale(2.0 / (window_size.0 as f32), 2.0 / (window_size.1 as f32), 1.0);
+        // This transform converts from point-space, with (0, 0) in the bottom left corner
+        // to NDC
+        // The final 96.0 / 72.0 scaling is because virtual DPI is based on 96
+        // DPI while points are 1/72 of an inch
+        let transform = euclid::Transform3D::create_translation(-1.0, -1.0, 0.0)
+            .pre_scale(2.0 / (window_size.width as f32), 2.0 / (window_size.height as f32), 1.0)
+            .pre_scale(96.0 / 72.0, 96.0 / 72.0, 1.0);
 
         let mut target = display.draw();
         target.clear_color(0.0, 0.0, 0.0, 1.0);
@@ -396,7 +400,7 @@ void main() {
                     _ => {}
                 },
                 glutin::WindowEvent::Resized(new_size) => {
-                    window_size = new_size.into();
+                    window_size = new_size;
                 }
                 _ => {}
             },
