@@ -336,7 +336,7 @@ void main() {
         FontAtlas::build(SDF_DIMENSION, &font, &display).expect("Failed to build font atlas");
     let layout = font_atlas.layout_string(
         Point::new(30.0, 30.0),
-        8.0,
+        16.0,
         // ":{<~The lazy cat jumps over the xenophobic dog, yodeling~>}",
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()`~'\";/.,<>?",
     );
@@ -372,8 +372,8 @@ void main() {
 
         let transform = euclid::Transform3D::create_translation(0.0, 0.0, 0.0)
             .pre_translate(euclid::Vector3D::new(-1.0, -1.0, 0.0))
-            .pre_scale(1.0 / (window_size.0 as f32), 1.0 / (window_size.1 as f32), 1.0)
-            .pre_scale(hidpi_factor, hidpi_factor, hidpi_factor);
+            .pre_scale(2.0 / (window_size.0 as f32), 2.0 / (window_size.1 as f32), 1.0)
+            .pre_scale(1.0 / hidpi_factor, 1.0 / hidpi_factor, 1.0 / hidpi_factor);
 
         let mut target = display.draw();
         target.clear_color(0.0, 0.0, 0.0, 1.0);
