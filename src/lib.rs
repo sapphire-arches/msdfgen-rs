@@ -38,7 +38,6 @@ pub fn compute_msdf(contours: &[Contour], dim: usize) -> Vec<Vec<(f32, f32, f32)
     }
     let scale: f32 = 1.0 / (dim as f32);
     let windings: Vec<i32> = contours.iter().map(|c| c.winding() as i32).collect();
-    println!("Windings: {:?}", windings);
 
     (0..dim)
         .map(|y| {
@@ -311,7 +310,6 @@ pub fn recolor_contours(contours: Vec<Contour>, threshold: Angle, mut seed: u64)
                 1 => {
                     // "Teardrop" case: there is only one sharp corner so we
                     // just pick 3 colors up front and cycle through them
-                    println!("Handling teardrop with {:?} elements", n);
                     let mut colors = [
                         (ColorFlags::W).switch(&mut seed),
                         ColorFlags::W,
