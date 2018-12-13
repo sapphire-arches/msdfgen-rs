@@ -274,7 +274,7 @@ impl<'font, 'facade, T: Facade> FontAtlas<'font, 'facade, T> {
 
 fn main() {
     let mut events_loop = glutin::EventsLoop::new();
-    let mut window_size = (512, 512);
+    let mut window_size = (512u32, 512);
     let window = glutin::WindowBuilder::new().with_dimensions(window_size.into());
     let context = glutin::ContextBuilder::new();
     let context = context.with_gl_profile(glutin::GlProfile::Core);
@@ -282,6 +282,7 @@ fn main() {
     let display =
         glium::Display::new(window, context, &events_loop).expect("Error creating GL display");
     let hidpi_factor = display.gl_window().window().get_hidpi_factor() as f32;
+    println!("{:?}", hidpi_factor);
 
     let font = get_font();
 
@@ -372,8 +373,7 @@ void main() {
 
         let transform = euclid::Transform3D::create_translation(0.0, 0.0, 0.0)
             .pre_translate(euclid::Vector3D::new(-1.0, -1.0, 0.0))
-            .pre_scale(2.0 / (window_size.0 as f32), 2.0 / (window_size.1 as f32), 1.0)
-            .pre_scale(1.0 / hidpi_factor, 1.0 / hidpi_factor, 1.0 / hidpi_factor);
+            .pre_scale(2.0 / (window_size.0 as f32), 2.0 / (window_size.1 as f32), 1.0);
 
         let mut target = display.draw();
         target.clear_color(0.0, 0.0, 0.0, 1.0);
@@ -396,7 +396,7 @@ void main() {
                     _ => {}
                 },
                 glutin::WindowEvent::Resized(new_size) => {
-                    window_size = (new_size.width as u32, new_size.height as u32)
+                    window_size = new_size.into();
                 }
                 _ => {}
             },
